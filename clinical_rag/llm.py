@@ -25,8 +25,8 @@ def get_chat(fast: bool = False, **kwargs) -> ChatOpenAI:
     return ChatOpenAI(model=model, **kwargs)
 
 
-def get_embeddings(name: str = "oai-3-small") -> OpenAIEmbeddings:
-    return OpenAIEmbeddings(model=EMBEDDING_MODELS[name], dimensions=EMBEDDING_DIMENSIONS)
+def get_embeddings(name: str = "oai-3-small", **kwargs) -> OpenAIEmbeddings:
+    return OpenAIEmbeddings(model=EMBEDDING_MODELS[name], dimensions=EMBEDDING_DIMENSIONS, **kwargs)
 
 
 def get_reranker(top_n: int = 8) -> CohereRerank:
