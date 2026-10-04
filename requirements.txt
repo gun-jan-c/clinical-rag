@@ -1,0 +1,17 @@
+# Unpinned for now; pin exact versions once check_providers.py passes.
+langchain-core
+langchain-openai
+langchain-cohere
+langchain-text-splitters
+psycopg[binary,pool]
+pgvector
+pydantic
+python-dotenv
+requests
+lxml
+tiktoken
+streamlit
+
+# Dev
+ruff
+pytest

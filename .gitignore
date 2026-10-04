@@ -1,0 +1,15 @@
+# Secrets: never commit
+.env
+.streamlit/secrets.toml
+.claude/settings.local.json
+
+# Downloaded source data
+data/raw/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
