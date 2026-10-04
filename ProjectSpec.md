@@ -94,7 +94,7 @@ flowchart LR
     U[Reviewer] --> APP[Streamlit app]
     APP --> SVC[services.api]
     SVC --> RET[Hybrid retriever]
-    RET --> DB[(Supabase Postgres<br/>pgvector + full-text)]
+    RET --> DB[(Postgres on Railway<br/>pgvector + full-text)]
     RET --> RR[Cohere Rerank]
     SVC --> GEN[GPT-6 Luna via OpenAI API<br/>structured output]
     GEN --> VER[Claim verifier]
@@ -126,7 +126,7 @@ flowchart LR
 | Embeddings | `text-embedding-3-small` and `text-embedding-3-large`, both with `dimensions=1024`, via `OpenAIEmbeddings` | Same vector size, so one schema serves both. Symmetric: queries and documents are embedded the same way |
 | Reranker | Cohere Rerank via `langchain-cohere` | Model from env `RERANK_MODEL_ID`. Trial key limits apply (section 5.8). Flag `RERANK_ENABLED` |
 | Orchestration | LangChain (`langchain-core`, `langchain-openai`, `langchain-cohere`, `langchain-text-splitters`) | Custom `BaseRetriever` wraps our SQL function. Model clients are created only in `llm.py` factories, so changing provider is a config change |
-| Database | Supabase Postgres + `pgvector` | Connect with `psycopg` + `pgvector` (**not** `supabase-py`) so moving to Aurora PostgreSQL is a connection-string change |
+| Database | Postgres 18 + `pgvector` on Railway (moved from Supabase on 2026-10-04, see decision log) | Connect with `psycopg` + `pgvector` so moving to Aurora PostgreSQL is a connection-string change |
 | Keyword search | Postgres full-text search (`tsvector`, GIN index) | Not true BM25; documented trade-off |
 | Validation | Pydantic v2 | Shared contract models in `clinical_rag/schemas.py` |
 | Evaluation | Custom retrieval metrics + custom grounding checks; RAGAS optional | Results stored in Postgres |
@@ -155,7 +155,7 @@ flowchart LR
 | Demo | Production on AWS |
 | --- | --- |
 | OpenAI API + Cohere API | Amazon Bedrock: the same OpenAI models through US inference profiles, Bedrock Rerank; data stays in your AWS account and billing is one AWS bill |
-| Supabase Postgres | Aurora PostgreSQL + pgvector |
+| Postgres + pgvector on Railway | Aurora PostgreSQL + pgvector |
 | Streamlit Community Cloud | Container on ECS Express Mode (App Runner closed to new customers on 30 April 2026) |
 | Manual ingestion | EventBridge Scheduler + Lambda / Step Functions |
 | Access codes | Amazon Cognito or corporate SSO |
@@ -749,13 +749,13 @@ Infra/security tasks are split: backend owns DB + GitHub secrets; frontend owns 
 
 | Item | Owner | Setting |
 | --- | --- | --- |
-| Supabase project | Architect (via Claude) | `clinical-rag`, free plan, `us-east-1` |
+| Railway project | Architect (via Claude) | `pgvector` service (image `pgvector/pgvector:pg18`) in the personal workspace, region US West. Hobby plan ($5/month incl. $5 usage) needed before embedding: the Trial's 0.5 GB volume holds today's ~222 MB but not the embeddings. `max_wal_size` set to 64 MB so the write-ahead log fits the volume |
 | OpenAI API project | Architect | Project `clinical-rag`, $10 prepaid credit, monthly budget alert, project-scoped API key. New accounts start at a low usage tier, so expect rate limits during bulk embedding (retry with backoff, section 5.6) |
 | Cohere API key | Architect | Trial key: free, 10 rerank calls/min, 1,000 calls/month, non-production use only. Apply for a production key only if the demo needs it |
 | Spend controls | Architect | Prepaid OpenAI credit is the hard cap; app-level daily caps (section 5.7) |
-| Secrets | All | `OPENAI_API_KEY`, `COHERE_API_KEY`, `GEN_MODEL_ID`, `FAST_MODEL_ID`, `RERANK_MODEL_ID`, `RERANK_ENABLED`, `DATABASE_URL` (Supabase pooler string), `NCBI_EMAIL`, `ACCESS_CODES`. Locally in `.env`; Streamlit secrets; GitHub Actions secrets. Never in git |
+| Secrets | All | `OPENAI_API_KEY`, `COHERE_API_KEY`, `GEN_MODEL_ID`, `FAST_MODEL_ID`, `RERANK_MODEL_ID`, `RERANK_ENABLED`, `DATABASE_URL` (Railway public `DATABASE_URL`), `NCBI_EMAIL`, `ACCESS_CODES`. Locally in `.env`; Streamlit secrets; GitHub Actions secrets. Never in git |
 | AWS account | Architect | Created; Bedrock blocked pending account verification. Not on the v1 critical path; used for the Phase 2 Bedrock run |
-| Free-tier behavior | Architect | Supabase pauses after ~1 week idle; Streamlit sleeps when idle; the Cohere trial monthly cap resets on the 1st. Open the app shortly before any demo |
+| Free-tier behavior | Architect | Railway Postgres runs continuously (no idle pause); Streamlit sleeps when idle; the Cohere trial monthly cap resets on the 1st. Open the app shortly before any demo |
 
 ## 10. Timeline: one-day, 10-hour build
 
@@ -764,7 +764,7 @@ Infra/security tasks are split: backend owns DB + GitHub secrets; frontend owns 
 - [ ] OpenAI project `clinical-rag` created, $10 credit loaded, budget alert set, API key in `.env`
 - [ ] Cohere trial key in `.env`
 - [ ] `scripts/check_providers.py` passes (chat, structured output, both embedding models, rerank); `GEN_MODEL_ID`, `FAST_MODEL_ID`, `RERANK_MODEL_ID` known
-- [ ] Supabase project `clinical-rag` created; `DATABASE_URL` (pooler) saved
+- [x] Postgres + pgvector on Railway created; `DATABASE_URL` saved (moved from Supabase on 2026-10-04)
 - [ ] GitHub repo with Day 1 code + this spec; Streamlit Community Cloud linked to GitHub
 - [ ] OpenAI and Cohere prices copied into config
 - [ ] Starter golden set (section 12) reviewed
