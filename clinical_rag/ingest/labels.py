@@ -17,10 +17,12 @@ from clinical_rag.parsing.tables import clean, table_to_markdown
 API_URL = "https://api.fda.gov/drug/label.json"
 
 # Pinned to the original manufacturer's label (set IDs checked on 2026-10-03). Searching by brand name
-# also returns repackager copies, and misses the current Wegovy label entirely.
+# also returns repackager copies, and misses the current Wegovy and Ozempic injection labels entirely.
+# Check the DailyMed title names the product and route: brand "Ozempic" also finds 27f15fac, the
+# "Ozempic / Rybelsus tablets" label (fixed 2026-10-04).
 LABEL_SET_IDS = {
     "Wegovy": "ee06186f-2aa3-4990-a760-757579d8f77b",
-    "Ozempic": "27f15fac-7d98-4114-a2ec-92494a91da98",
+    "Ozempic": "adec4fd2-6858-4c99-91d4-531f5f2a2d79",
     "Saxenda": "3946d389-0926-4f77-a708-0acb8153b143",
     "Zepbound": "487cd7e7-434c-4925-99fa-aa80b1cc776b",
     "Mounjaro": "d2d7da5d-ad07-4228-955f-cf7e355c8cc0",
