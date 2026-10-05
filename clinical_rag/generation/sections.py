@@ -36,19 +36,29 @@ MAX_SECTION_OUTPUT_TOKENS = 8_000  # includes reasoning tokens; at most ~$0.004 
 ONGOING = ["RECRUITING", "NOT_YET_RECRUITING", "ACTIVE_NOT_RECRUITING", "ENROLLING_BY_INVITATION"]
 
 
-def pipeline_section(drugs: list[str], progress: Progress) -> SectionDraft:
-    start = time.perf_counter()
-    progress("pipeline", "retrieving")
+def trial_rows(drugs: list[str] | None = None, phases: list[str] | None = None,
+               statuses: list[str] | None = None) -> list[TrialRow]:
+    """Trials from the registry, highest phase and newest first. None = no filter. Also behind api.get_pipeline."""
     with pool().connection() as conn:
         rows = conn.execute("""
             select t.nct_id, t.title, d.metadata->'drugs', t.phase, t.status, t.sponsor, t.enrollment, t.first_posted
             from trials t join documents d on d.doc_id = 'ctgov:' || t.nct_id
-            where d.metadata->'drugs' ?| %s
-            order by t.phase desc, t.first_posted desc""", (drugs,)).fetchall()
-    table = [TrialRow(nct_id=nct, title=title or "", drug=", ".join(d for d in drugs if d in row_drugs),
-                      phase=phase or [], status=status, sponsor=sponsor, enrollment=enrollment,
-                      first_posted=first_posted, url=f"https://clinicaltrials.gov/study/{nct}")
-             for nct, title, row_drugs, phase, status, sponsor, enrollment, first_posted in rows]
+            where (%(drugs)s::text[] is null or d.metadata->'drugs' ?| %(drugs)s)
+              and (%(phases)s::text[] is null or t.phase && %(phases)s)
+              and (%(statuses)s::text[] is null or t.status = any(%(statuses)s))
+            order by t.phase desc, t.first_posted desc""",
+            {"drugs": drugs, "phases": phases, "statuses": statuses}).fetchall()
+    return [TrialRow(nct_id=nct, title=title or "",
+                     drug=", ".join(d for d in (drugs or row_drugs) if d in row_drugs),
+                     phase=phase or [], status=status, sponsor=sponsor, enrollment=enrollment,
+                     first_posted=first_posted, url=f"https://clinicaltrials.gov/study/{nct}")
+            for nct, title, row_drugs, phase, status, sponsor, enrollment, first_posted in rows]
+
+
+def pipeline_section(drugs: list[str], progress: Progress) -> SectionDraft:
+    start = time.perf_counter()
+    progress("pipeline", "retrieving")
+    table = trial_rows(drugs)
     progress("pipeline", "done")
     return SectionDraft(section_key="pipeline", title=SECTION_TITLES["pipeline"], table=table,
                         usage=Usage(latency_ms=round((time.perf_counter() - start) * 1000)))

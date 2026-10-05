@@ -317,7 +317,7 @@ create table brief_sections (
   draft          jsonb not null,
   retrieved_ids  text[] not null default '{}',
   review_status  text not null default 'pending'
-                 check (review_status in ('pending','approved','edited','rejected')),
+                 check (review_status in ('pending','approved','edited','rejected','failed')),  -- 'failed' added in 005
   reviewer_text  text,
   reviewed_by    text,
   reviewed_at    timestamptz,
