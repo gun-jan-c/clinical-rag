@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from datetime import date
 
 from cohere.errors import TooManyRequestsError
@@ -65,3 +67,28 @@ def test_brief_fails_only_when_every_llm_section_failed(monkeypatch):
     fake_sections(monkeypatch, failed={"efficacy", "safety"})
     req = BriefRequest(drugs=["tirzepatide"], sections=["pipeline", "efficacy", "safety"], requested_by="me")
     assert brief.build_brief(req).status == "failed"
+
+
+def test_a_section_that_crashes_is_marked_failed_and_the_rest_finish(monkeypatch):
+    fake_sections(monkeypatch)
+
+    def section(key, drugs, progress):
+        if key == "safety":
+            raise AttributeError("boom")
+        return SectionDraft(section_key=key, title=key)
+
+    monkeypatch.setattr(brief, "llm_section", section)
+    steps = []
+    req = BriefRequest(drugs=["tirzepatide"], sections=["efficacy", "safety", "evidence_gaps"], requested_by="me")
+    b = brief.build_brief(req, lambda key, step: steps.append((key, step)))
+    assert [s.review_status for s in b.sections] == ["pending", "failed", "pending"]
+    assert b.sections[1].not_found == ["Section could not be generated (AttributeError)"]
+    assert ("safety", "failed") in steps
+    assert b.status == "draft"
+
+
+def test_httpx_is_loaded_before_sections_run_in_threads():
+    # openai looks httpx up in sys.modules without importing it. If another section's thread is still loading
+    # httpx (Cohere's first call), openai finds it half-loaded and crashes (first brief after start, 2026-10-04).
+    code = "import sys, clinical_rag.generation.brief; assert 'httpx' in sys.modules"
+    subprocess.run([sys.executable, "-c", code], check=True)

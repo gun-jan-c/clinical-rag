@@ -7,6 +7,9 @@ The Cohere trial key allows 10 rerank calls per minute and 1,000 API calls per m
 import os
 import time
 
+# Loaded now, before any threads: openai reads httpx from sys.modules, and Cohere's first call otherwise loads it
+# in one section's thread while another section's openai call finds it half-loaded and crashes.
+import httpx  # noqa: F401
 from cohere.errors import TooManyRequestsError
 from langchain_core.documents import Document
 

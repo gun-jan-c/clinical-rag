@@ -52,6 +52,8 @@ st.set_page_config(page_title="Clinical RAG Brief Generator", page_icon=":materi
 if user() is None:
     st.navigation([st.Page(login_page, title="Log in", icon=":material/login:")]).run()
 else:
-    page = st.navigation([st.Page(home, title="Home", icon=":material/home:", default=True)])
+    page = st.navigation([st.Page(home, title="Home", icon=":material/home:", default=True),
+                          st.Page("pages/1_Generate.py", title="Generate", icon=":material/edit_note:"),
+                          st.Page("pages/2_Review.py", title="Review", icon=":material/fact_check:")])
     page.run()
     sidebar()  # after the page, so the usage meter includes what the page just did

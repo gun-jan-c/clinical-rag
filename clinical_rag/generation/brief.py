@@ -1,9 +1,10 @@
 """A full brief (ProjectSpec.md sections 2 and 3). Saving it, the daily cap and the audit log are in services/api.py.
 
 Order: pipeline (SQL, instant) -> the LLM sections at the same time -> evidence_gaps last, because it uses the
-other sections' not_found items.
+other sections' not_found items. A section that crashes is marked "failed" and the rest of the brief still finishes.
 """
 
+import logging
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -17,8 +18,21 @@ from clinical_rag.generation.sections import (
     llm_section,
     pipeline_section,
 )
-from clinical_rag.generation.templates import TEMPLATES
-from clinical_rag.schemas import Brief, BriefRequest, SectionDraft
+from clinical_rag.generation.templates import SECTION_TITLES, TEMPLATES
+from clinical_rag.schemas import Brief, BriefRequest, SectionDraft, SectionKey
+
+log = logging.getLogger(__name__)
+
+
+def _guarded(key: SectionKey, progress: Progress, section, *args) -> SectionDraft:
+    """Run one section; any error marks just that section failed (the full error goes to the log)."""
+    try:
+        return section(*args)
+    except Exception as e:
+        log.exception("Section %s failed", key)
+        progress(key, "failed")
+        return SectionDraft(section_key=key, title=SECTION_TITLES[key], review_status="failed",
+                            not_found=[f"Section could not be generated ({type(e).__name__})"])
 
 
 def data_as_of() -> date:
@@ -32,14 +46,15 @@ def build_brief(req: BriefRequest, on_progress: Progress | None = None) -> Brief
     progress = on_progress or (lambda key, step: None)
     done: dict[str, SectionDraft] = {}
     if "pipeline" in req.sections:
-        done["pipeline"] = pipeline_section(req.drugs, progress)
+        done["pipeline"] = _guarded("pipeline", progress, pipeline_section, req.drugs, progress)
     llm_keys = [k for k in req.sections if k in TEMPLATES]
     with ThreadPoolExecutor(max_workers=max(1, len(llm_keys))) as pool_:
-        futures = {k: pool_.submit(llm_section, k, req.drugs, progress) for k in llm_keys}
+        futures = {k: pool_.submit(_guarded, k, progress, llm_section, k, req.drugs, progress) for k in llm_keys}
         done |= {k: f.result() for k, f in futures.items()}
     if "evidence_gaps" in req.sections:
         open_questions = [q for s in done.values() if s.review_status != "failed" for q in s.not_found]
-        done["evidence_gaps"] = evidence_gaps_section(req.drugs, open_questions, progress)
+        done["evidence_gaps"] = _guarded("evidence_gaps", progress, evidence_gaps_section, req.drugs, open_questions,
+                                         progress)
 
     sections = [done[k] for k in req.sections]
     llm = [s for s in sections if s.section_key != "pipeline"]
