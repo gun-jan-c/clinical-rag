@@ -7,7 +7,7 @@ table with every trial in a collapsed table; review controls under each section;
 import pandas as pd
 import streamlit as st
 
-from clinical_rag.schemas import Brief, ReviewAction, SectionDraft, TrialRow
+from clinical_rag.schemas import Brief, ReviewAction, SectionDraft
 from ui import components
 from ui.backend import backend
 from ui.layout import friendly_errors, user
@@ -18,22 +18,6 @@ BRIEF_STATUS = {"generating": "Generating", "draft": "Draft", "in_review": "In r
                 "failed": "Failed"}
 
 
-def phase_label(phase: list[str]) -> str:
-    """["PHASE2", "PHASE3"] -> "Phase 2/3"; [] -> "Not stated" (registry codes are not for readers)."""
-    if not phase:
-        return "Not stated"
-    if phase == ["EARLY_PHASE1"]:
-        return "Early phase 1"
-    if phase == ["NA"]:
-        return "Not applicable"  # registry: studies without drug phases, e.g. behavioural
-    numbers = [p.removeprefix("PHASE") for p in phase]
-    return "Phase " + "/".join(numbers) if all(n.isdigit() for n in numbers) else ", ".join(phase)
-
-
-def status_label(status: str | None) -> str:
-    return status.replace("_", " ").capitalize() if status else "Not stated"
-
-
 def pipeline(section: SectionDraft, brief: Brief) -> None:
     rows = section.table or []
     st.caption(f"Trial status as of {brief.data_as_of:%B %d, %Y}, straight from ClinicalTrials.gov. "
@@ -41,25 +25,19 @@ def pipeline(section: SectionDraft, brief: Brief) -> None:
     if not rows:
         st.info("No trials found for these drugs.")
         return
-    trials = pd.DataFrame([{"Drug": d.strip(), "Phase": phase_label(t.phase)}
+    trials = pd.DataFrame([{"Drug": d.strip(), "Phase": components.phase_label(t.phase)}
                            for t in rows for d in (t.drug or "Not stated").split(",")])
-    phases = sorted(trials["Phase"].unique(),  # Early phase 1, Phase 1 ... Phase 4, Not applicable, Not stated
-                    key=lambda p: (not p.startswith(("Early", "Phase")), not p.startswith("Early"), p))
+    phases = components.phase_order(trials["Phase"])
     counts = pd.crosstab(trials["Drug"], trials["Phase"]).reindex(columns=phases, fill_value=0)
     counts["Total"] = counts.sum(axis=1)
     st.markdown("**Number of trials by phase**")
     st.dataframe(counts)
+    shared = sum("," in (t.drug or "") for t in rows)
+    if shared:
+        st.caption(f"{shared} of the {len(rows)} trials test more than one of these drugs and are counted in each "
+                   "row, so the totals add up to more than the number of trials.")
     with st.expander(f"All {len(rows)} trials"):
-        st.dataframe(trial_table(rows), hide_index=True,
-                     column_config={"Link": st.column_config.LinkColumn("Link", display_text="Open"),
-                                    "Enrollment": st.column_config.NumberColumn(format="%d"),
-                                    "First posted": st.column_config.DateColumn()})
-
-
-def trial_table(rows: list[TrialRow]) -> pd.DataFrame:
-    return pd.DataFrame([{"NCT ID": t.nct_id, "Title": t.title, "Drug": t.drug, "Phase": phase_label(t.phase),
-                          "Status": status_label(t.status), "Sponsor": t.sponsor, "Enrollment": t.enrollment,
-                          "First posted": t.first_posted, "Link": t.url} for t in rows])
+        st.dataframe(components.trial_table(rows), hide_index=True, column_config=components.TRIAL_COLUMNS)
 
 
 def written_section(section: SectionDraft) -> None:

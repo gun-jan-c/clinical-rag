@@ -12,10 +12,9 @@ import streamlit as st
 
 from clinical_rag.schemas import Brief, BriefRequest, SectionDraft, SectionKey
 from ui.backend import backend
+from ui.components import DRUGS
 from ui.layout import friendly_errors, user
 
-DRUGS = ["semaglutide", "tirzepatide", "liraglutide", "orforglipron",
-         "retatrutide", "survodutide", "cagrilintide", "mazdutide"]  # spec section 2
 MAX_DRUGS = 3  # keeps a brief near 2 minutes and under Cohere's 10 rerank calls a minute (decision log)
 SECTIONS: dict[SectionKey, str] = {
     "pipeline": "Development pipeline by phase",

@@ -49,12 +49,15 @@ def home() -> None:
 
 
 st.set_page_config(page_title="Clinical RAG Brief Generator", page_icon=":material/biotech:", layout="wide")
+# Streamlit leaves ~6rem above every page's title; half of that is enough below the top bar. CSS only, no JS.
+st.html("<style>[data-testid='stMainBlockContainer'] {padding-top: 3rem}</style>")
 if user() is None:
     st.navigation([st.Page(login_page, title="Log in", icon=":material/login:")]).run()
 else:
     page = st.navigation([st.Page(home, title="Home", icon=":material/home:", default=True),
                           st.Page("pages/1_Generate.py", title="Generate", icon=":material/edit_note:"),
                           st.Page("pages/2_Review.py", title="Review", icon=":material/fact_check:"),
-                          st.Page("pages/3_Search_Lab.py", title="Search Lab", icon=":material/manage_search:")])
+                          st.Page("pages/3_Search_Lab.py", title="Search Lab", icon=":material/manage_search:"),
+                          st.Page("pages/4_Pipeline.py", title="Pipeline", icon=":material/bar_chart:")])
     page.run()
     sidebar()  # after the page, so the usage meter includes what the page just did

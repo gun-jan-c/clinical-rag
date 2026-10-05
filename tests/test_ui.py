@@ -177,3 +177,33 @@ def test_search_lab_table_preset_searches_tables_only(app):
     button(app, "nausea incidence by dose").click().run()
     types = [c.value for c in app.caption if "· Adverse Reactions" in c.value or "· Results" in c.value]
     assert types and all("table" in t for t in types)
+
+
+def test_pipeline_shows_chart_and_all_trials(app):
+    log_in(app)
+    app.switch_page("pages/4_Pipeline.py").run()
+    assert not app.exception
+    assert any("No language model is used on this page" in c.value for c in app.caption)
+    assert app.get("vega_lite_chart")
+    assert len(app.dataframe[0].value) == len(mock.TRIALS)
+
+
+def test_pipeline_filters_by_phase(app):
+    log_in(app)
+    app.switch_page("pages/4_Pipeline.py").run()
+    app.multiselect[1].select("PHASE3").run()
+    table = app.dataframe[0].value
+    assert len(table) == len(mock.TRIALS) // 2 and set(table["Phase"]) == {"Phase 3"}
+
+
+def test_review_notes_trials_counted_under_two_drugs(app, no_briefs, monkeypatch):
+    both = mock.TRIALS[0].model_copy(update={"nct_id": "NCT99999999", "drug": "semaglutide, tirzepatide"})
+    section = mock._section
+
+    def with_shared_trial(key, drugs):
+        s = section(key, drugs)
+        return s.model_copy(update={"table": s.table + [both]}) if key == "pipeline" else s
+
+    monkeypatch.setattr(mock, "_section", with_shared_trial)
+    generate_and_open_review(app)
+    assert any(c.value.startswith("1 of the 5 trials test more than one") for c in app.caption)
