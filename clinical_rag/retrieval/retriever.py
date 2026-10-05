@@ -15,6 +15,7 @@ from langchain_core.retrievers import BaseRetriever
 from psycopg.types.json import Jsonb
 
 from clinical_rag.db import drug_aliases, pool
+from clinical_rag.ingest.drugs import matched_drugs
 from clinical_rag.llm import EMBEDDING_DIMENSIONS, get_embeddings
 from clinical_rag.retrieval.query_expansion import expand
 from clinical_rag.retrieval.rerank import rerank as rerank_docs
@@ -75,6 +76,7 @@ class HybridPostgresRetriever(BaseRetriever):
     drugs: list[str] | None = None
     content_types: list[ContentType] | None = None
     limit: int = CANDIDATES
+    filter_named_drugs: bool = False  # with no `drugs` given, search only the drugs the query names
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> list[Document]:
         if self.mode == "keyword":  # no embedding needed; the dense side is ignored
@@ -84,9 +86,11 @@ class HybridPostgresRetriever(BaseRetriever):
         # Hybrid asks for the fused top N; the single modes ask for everything so their own top N is complete.
         match_count = CANDIDATES if self.mode == "hybrid" else 2 * CANDIDATE_POOL
         with pool().connection() as conn:
-            keyword_text = expand(query, drug_aliases(conn))
+            aliases = drug_aliases(conn)
+            keyword_text = expand(query, aliases)
+            drugs = self.drugs or (matched_drugs(query, aliases) if self.filter_named_drugs else None)
             ranked_lists = []
-            for drug, content_type in product(self.drugs or [None], self.content_types or [None]):
+            for drug, content_type in product(drugs or [None], self.content_types or [None]):
                 where = {k: v for k, v in [("drugs", [drug] if drug else None), ("content_type", content_type)] if v}
                 cur = conn.execute(
                     "select * from hybrid_search(%s, %s, %s, %s, %s, %s, %s)",

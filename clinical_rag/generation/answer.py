@@ -1,6 +1,6 @@
 """Single-question RAG (ProjectSpec.md section 3, steps 2-7). services/api.ask() adds the daily cap and audit.
 
-hybrid retrieval (top 20) -> rerank (top 8) -> context expansion (6,000-token budget) -> the generation model
+hybrid retrieval (top 20, only the drugs the question names, if any) -> rerank (top 8) -> context expansion (6,000-token budget) -> the generation model
 writes claims with citations (structured output, one retry) -> every claim is verified. Step times are logged.
 """
 
@@ -78,7 +78,7 @@ def answer_question(question: str) -> Answer:
         now = time.perf_counter()
         times[step], last = round((now - last) * 1000), now
 
-    docs = HybridPostgresRetriever().invoke(question)
+    docs = HybridPostgresRetriever(filter_named_drugs=True).invoke(question)
     lap("retrieve")
     docs = rerank(docs, question, TOP_K)
     lap("rerank")
