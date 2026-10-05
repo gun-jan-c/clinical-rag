@@ -157,3 +157,23 @@ def test_edit_replaces_the_section_text(app, no_briefs):
 
 def button_by_key(app, key):
     return next(b for b in app.button if b.key == key)
+
+
+def test_search_lab_preset_shows_four_columns_with_ranks(app):
+    log_in(app)
+    app.switch_page("pages/3_Search_Lab.py").run()
+    button(app, "NCT05872620").click().run()
+    assert not app.exception
+    assert app.text_input(key="lab-query").value == "NCT05872620"
+    assert [s.value for s in app.subheader] == ["Dense", "Keyword", "Hybrid", "Hybrid + rerank"]
+    ranks = [c.value for c in app.caption if c.value.startswith("**Dense")]
+    assert len(ranks) == 4 * 3  # 3 mock sources per column
+    assert sum("Rerank score" in r for r in ranks) == 3  # only the last column is reranked
+
+
+def test_search_lab_table_preset_searches_tables_only(app):
+    log_in(app)
+    app.switch_page("pages/3_Search_Lab.py").run()
+    button(app, "nausea incidence by dose").click().run()
+    types = [c.value for c in app.caption if "· Adverse Reactions" in c.value or "· Results" in c.value]
+    assert types and all("table" in t for t in types)

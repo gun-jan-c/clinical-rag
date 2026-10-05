@@ -54,6 +54,7 @@ if user() is None:
 else:
     page = st.navigation([st.Page(home, title="Home", icon=":material/home:", default=True),
                           st.Page("pages/1_Generate.py", title="Generate", icon=":material/edit_note:"),
-                          st.Page("pages/2_Review.py", title="Review", icon=":material/fact_check:")])
+                          st.Page("pages/2_Review.py", title="Review", icon=":material/fact_check:"),
+                          st.Page("pages/3_Search_Lab.py", title="Search Lab", icon=":material/manage_search:")])
     page.run()
     sidebar()  # after the page, so the usage meter includes what the page just did
