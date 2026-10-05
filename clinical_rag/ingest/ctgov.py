@@ -85,6 +85,7 @@ def to_document(study: dict, aliases: dict[str, str]) -> dict:
         "metadata": {
             "drugs": matched_drugs(" ".join(trial["interventions"] + [title, trial["title"] or ""]), aliases),
             "nct_ids": [trial["nct_id"]],
+            "acronym": p["identificationModule"].get("acronym"),  # e.g. "SURMOUNT-1"; labels papers' chunks
             "phase": trial["phase"],
             "status": trial["status"],
             "year": trial["first_posted"].year if trial["first_posted"] else None,

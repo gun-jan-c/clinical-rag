@@ -102,3 +102,22 @@ def test_fixed_strategy_overlaps_pieces():
     assert all(c["token_count"] <= MAX_TOKENS + 20 for c in chunks)  # + the 'Title: ...' prefix
     assert chunks[0]["context"].startswith("Results: Patients")
     assert chunks[0]["context"][-100:] in chunks[1]["context"]
+
+
+def test_paper_chunks_name_their_trial_in_the_header():
+    acronyms = {"NCT04184622": "SURMOUNT-1", "NCT00000001": None}
+    paper = _doc(source="pubmed", metadata={**_doc()["metadata"], "nct_ids": ["NCT04184622", "NCT00000001"]})
+    paper["trials"] = strategies.trial_label(paper, acronyms)
+    assert paper["trials"] == "SURMOUNT-1 (NCT04184622), NCT00000001"
+    chunk = strategies.section_chunks(paper)[0]
+    assert chunk["content"].startswith(
+        "Title: Drug X trial | Trial: SURMOUNT-1 (NCT04184622), NCT00000001 | Section: Results\n\n")
+    assert strategies.section_chunks(_doc())[0]["content"].startswith("Title: Drug X trial | Section: Results\n\n")
+    registry = _doc(source="clinicaltrials.gov", metadata={**_doc()["metadata"], "nct_ids": ["NCT04184622"]})
+    assert strategies.trial_label(registry, acronyms) is None
+
+
+def test_europe_pmc_trial_label_ignores_trials_only_cited_in_the_body():
+    paper = _doc(sections={"Abstract": "A trial (NCT00000001) of drug X.", "Discussion": "Unlike NCT04184622, ..."},
+                 metadata={**_doc()["metadata"], "nct_ids": ["NCT00000001", "NCT04184622"]})
+    assert strategies.trial_label(paper, {"NCT04184622": "SURMOUNT-1"}) == "NCT00000001"

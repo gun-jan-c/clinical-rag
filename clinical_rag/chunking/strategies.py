@@ -35,6 +35,9 @@ SKIP_SECTION_RE = re.compile(
     r"|abbreviation|glossary|generative ai|orcid|^references$|^spl medguide$",
     re.IGNORECASE)
 
+NCT_RE = re.compile(r"NCT\d{8}")
+OWN_TRIAL_SECTION_RE = re.compile(r"abstract|regist", re.IGNORECASE)  # where a paper names its own trial
+
 # Where a long section may be cut, from the biggest break to the smallest: (pattern, glue to rejoin pieces).
 BREAKS = [(r"\n\n", "\n\n"), (r"\n", "\n"), (r"(?<=[.!?])\s+(?=[A-Z0-9(\[•])|\s+(?=• )", " ")]
 
@@ -118,8 +121,25 @@ def split_section(text: str) -> list[str]:
     return [piece for part in _subsections(text) for piece in _pack(part, BREAKS)]
 
 
+def trial_label(doc: dict, acronyms: dict[str, str | None]) -> str | None:
+    """'SURMOUNT-1 (NCT04184622)' for each registered trial a paper reports. A paper's Results part often never
+    names its trial (only the Conclusions do), so the label goes in every chunk header. None for registry entries.
+
+    Europe PMC `nct_ids` come from the full text, which also cites other trials (561 IDs vs 238 in title +
+    abstract), so for those papers only the title, abstract and trial-registration sections count."""
+    if doc["source"] == "clinicaltrials.gov":
+        return None
+    ids = doc["metadata"].get("nct_ids", [])
+    if doc["source"] == "europepmc":
+        own = " ".join([doc["title"], *(t for n, t in doc["sections"].items() if OWN_TRIAL_SECTION_RE.search(n))])
+        ids = sorted(set(NCT_RE.findall(own)))
+    return ", ".join(f"{acronyms[i]} ({i})" if acronyms.get(i) else i for i in ids) or None
+
+
 def _prefix(doc: dict, section: str | None) -> str:
-    return f"Title: {doc['title']} | Section: {section}\n\n" if section else f"Title: {doc['title']}\n\n"
+    parts = [f"Title: {doc['title']}", f"Trial: {doc['trials']}" if doc.get("trials") else "",
+             f"Section: {section}" if section else ""]
+    return " | ".join(p for p in parts if p) + "\n\n"
 
 
 def _label_caption(item: dict) -> str:
@@ -198,6 +218,10 @@ def main() -> None:
                            "where not exists (select 1 from chunks c where c.doc_id = d.doc_id)")
         cols = [c.name for c in cur.description]
         docs = [dict(zip(cols, row)) for row in cur.fetchall()]
+        acronyms = dict(conn.execute("select split_part(doc_id, ':', 2), metadata->>'acronym' from documents "
+                                     "where source = 'clinicaltrials.gov'").fetchall())
+        for d in docs:
+            d["trials"] = trial_label(d, acronyms)
         print(f"{len(docs)} documents to chunk")
         chunks = [c for d in docs for c in chunk_document(d)]
         with conn.cursor() as cur:
