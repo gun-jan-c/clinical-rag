@@ -200,6 +200,11 @@ def get_pipeline(filters: PipelineFilters) -> list[TrialRow]:
     return trial_rows(filters.drugs or None, filters.phases or None, filters.statuses or None)
 
 
+def get_data_as_of() -> date:
+    """Date of the last ingestion run, for the "Data as of" banner."""
+    return data_as_of()
+
+
 def get_usage_today() -> UsageStatus:
     with pool().connection() as conn:
         row = conn.execute("select briefs, asks from usage_daily where day = %s", (_day(),)).fetchone()

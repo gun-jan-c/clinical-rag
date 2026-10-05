@@ -200,6 +200,10 @@ def get_pipeline(filters: PipelineFilters) -> list[TrialRow]:
             and (not filters.statuses or t.status in filters.statuses)]
 
 
+def get_data_as_of() -> date:
+    return DATA_AS_OF
+
+
 def get_usage_today() -> UsageStatus:
     return UsageStatus(briefs_today=_counts["briefs"], briefs_cap=BRIEFS_CAP,
                        asks_today=_counts["asks"], asks_cap=ASKS_CAP)
