@@ -159,24 +159,44 @@ def button_by_key(app, key):
     return next(b for b in app.button if b.key == key)
 
 
-def test_search_lab_preset_shows_four_columns_with_ranks(app):
+def open_search_lab(app, preset):
     log_in(app)
     app.switch_page("pages/3_Search_Lab.py").run()
-    button(app, "NCT05872620").click().run()
+    button(app, preset).click().run()
     assert not app.exception
+
+
+def test_search_lab_preset_explains_ranking_and_chunking(app):
+    open_search_lab(app, "NCT05872620")
     assert app.text_input(key="lab-query").value == "NCT05872620"
-    assert [s.value for s in app.subheader] == ["Dense", "Keyword", "Hybrid", "Hybrid + rerank"]
-    ranks = [c.value for c in app.caption if c.value.startswith("**Dense")]
-    assert len(ranks) == 4 * 3  # 3 mock sources per column
-    assert sum("Rerank score" in r for r in ranks) == 3  # only the last column is reranked
+    assert [h.value for h in app.header] == ["Step 1: Ranking", "Step 2: Chunking"]
+    assert [s.value for s in app.subheader] == ["Dense", "Keyword", "Hybrid", "Hybrid + rerank",
+                                                "Section chunks", "Fixed-size chunks"]
+    assert sum("Exact IDs need keyword search" in i.value for i in app.info) == 2  # one lesson per step
+    notes = [m.value for m in app.markdown]
+    assert sum(n.startswith("**Score ") and "1/(60+" in n for n in notes) == 3  # 3 mock sources
+    assert sum(n.startswith("**Relevance ") and "Was hybrid #" in n for n in notes) == 3
 
 
-def test_search_lab_table_preset_searches_tables_only(app):
-    log_in(app)
-    app.switch_page("pages/3_Search_Lab.py").run()
-    button(app, "nausea incidence by dose").click().run()
-    types = [c.value for c in app.caption if "· Adverse Reactions" in c.value or "· Results" in c.value]
-    assert types and all("table" in t for t in types)
+def test_search_lab_table_preset_filters_section_chunks_only(app, monkeypatch):
+    calls = []
+    search = mock.search
+
+    def spy(query, **kwargs):
+        calls.append(kwargs)
+        return search(query, **kwargs)
+
+    monkeypatch.setattr(mock, "search", spy)
+    open_search_lab(app, "nausea incidence by dose")
+    assert sorted(str(c["content_types"]) for c in calls) == ["None"] + ["['table']"] * 4
+    assert [c["strategy"] for c in calls if c["content_types"] is None] == ["fixed"]
+
+
+def test_search_lab_shows_passages_as_plain_text(app, monkeypatch):
+    source = mock.SOURCES[0].model_copy(update={"snippet": "- Dosing *weekly* $5"})
+    monkeypatch.setattr(mock, "SOURCES", [source])
+    open_search_lab(app, "LY3502970")
+    assert r"\- Dosing \*weekly\* \$5" in [c.value for c in app.caption]
 
 
 def test_pipeline_shows_chart_and_all_trials(app):
