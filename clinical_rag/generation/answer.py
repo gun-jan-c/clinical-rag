@@ -11,6 +11,7 @@ import time
 from pydantic import BaseModel, Field
 
 from clinical_rag.config import cost_usd
+from clinical_rag.generation.templates import ANSWER_PROMPT
 from clinical_rag.generation.verify import verify
 from clinical_rag.llm import get_chat
 from clinical_rag.retrieval.context import expand_context
@@ -22,17 +23,6 @@ log = logging.getLogger(__name__)
 
 TOP_K = 8
 MAX_OUTPUT_TOKENS = 4_000  # includes the model's reasoning tokens
-
-SYSTEM_PROMPT = """You answer questions about obesity drugs using only the sources provided.
-
-1. Use only the provided sources. Each source is labeled with its id and content type (text, table, figure).
-2. Every claim must cite one or more source ids that directly support it.
-3. Copy numbers exactly as written in the source (values, units, confidence intervals, timepoints, dose arms).
-4. If information the question asks for is not in the sources, add it to not_found. Never fill gaps from general \
-knowledge, even when you know the answer.
-5. When citing a figure, describe only what the caption or description states; never estimate values from a figure.
-6. Neutral, scientific tone. No promotional language, no treatment recommendations, no comparative superiority \
-claims unless a head-to-head trial in the sources states it."""
 
 
 class DraftClaim(BaseModel):
@@ -47,16 +37,24 @@ class AnswerDraft(BaseModel):
     not_found: list[str] = Field(description="Parts of the question the sources do not answer")
 
 
+def render_source(item: dict, s: Source) -> str:
+    return (f'<source id="{s.chunk_id}" type="{s.content_type}" title="{s.title}" section="{s.section or ""}">\n'
+            f'{item["text"]}\n</source>')
+
+
 def format_sources(items: list[dict], sources: list[Source]) -> str:
-    return "\n\n".join(
-        f'<source id="{s.chunk_id}" type="{s.content_type}" title="{s.title}" section="{s.section or ""}">\n'
-        f'{i["text"]}\n</source>'
-        for i, s in zip(items, sources))
+    return "\n\n".join(render_source(i, s) for i, s in zip(items, sources))
 
 
-def generate(messages: list[tuple[str, str]]) -> tuple[AnswerDraft, int, int]:
+def seen_by_model(items: list[dict], sources: list[Source]) -> dict[str, str]:
+    """chunk_id -> the whole source block the model read, label included, so verify checks exactly that
+    (the model may take an NCT ID from a source's id or a trial name from its title)."""
+    return {cid: render_source(i, s) for i, s in zip(items, sources) for cid in i["chunk_ids"]}
+
+
+def generate(messages: list[tuple[str, str]], max_tokens: int = MAX_OUTPUT_TOKENS) -> tuple[AnswerDraft, int, int]:
     """Structured output with one retry on a format error. Returns the draft and the tokens used."""
-    model = get_chat(max_tokens=MAX_OUTPUT_TOKENS).with_structured_output(AnswerDraft, include_raw=True)
+    model = get_chat(max_tokens=max_tokens).with_structured_output(AnswerDraft, include_raw=True)
     input_tokens = output_tokens = 0
     for _ in range(2):
         out = model.invoke(messages)
@@ -87,10 +85,10 @@ def answer_question(question: str) -> Answer:
     sources = to_sources([first_hit[i["chunk_ids"][0]] for i in items])
     lap("context")
     draft, input_tokens, output_tokens = generate(
-        [("system", SYSTEM_PROMPT), ("human", f"Sources:\n\n{format_sources(items, sources)}\n\nQuestion: {question}")])
+        [("system", ANSWER_PROMPT), ("human", f"Sources:\n\n{format_sources(items, sources)}\n\nQuestion: {question}")])
     lap("generate")
-    sent = {cid: i["text"] for i in items for cid in i["chunk_ids"]}
-    claims = verify([Claim(text=c.text, citation_ids=c.citation_ids) for c in draft.claims], sent)
+    claims = verify([Claim(text=c.text, citation_ids=c.citation_ids) for c in draft.claims],
+                    seen_by_model(items, sources))
     lap("verify")
     log.info("answer_question ms: %s", times)
 

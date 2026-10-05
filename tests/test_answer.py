@@ -2,8 +2,14 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from clinical_rag.generation import answer
-from clinical_rag.generation.answer import AnswerDraft, format_sources, generate
-from clinical_rag.schemas import Source
+from clinical_rag.generation.answer import (
+    AnswerDraft,
+    format_sources,
+    generate,
+    seen_by_model,
+)
+from clinical_rag.generation.verify import verify
+from clinical_rag.schemas import Claim, Source
 
 
 class FakeModel:
@@ -47,3 +53,11 @@ def test_format_sources_labels_each_source_with_its_chunk_id():
     assert format_sources([{"text": "| Nausea | 15.8 |"}], [s]) == (
         '<source id="label:oz:section:29" type="table" title="Ozempic prescribing information" '
         'section="Adverse reactions">\n| Nausea | 15.8 |\n</source>')
+
+
+def test_verify_sees_the_source_label_too():
+    s = Source(chunk_id="ctgov:NCT05556512:section:3", doc_id="ctgov:NCT05556512", source="clinicaltrials.gov",
+               content_type="text", title="A Study of Tirzepatide (SURMOUNT-MMO)", url="u", snippet="")
+    sent = seen_by_model([{"text": "Status: ACTIVE_NOT_RECRUITING", "chunk_ids": [s.chunk_id]}], [s])
+    claim = verify([Claim(text="NCT05556512 is still running.", citation_ids=[s.chunk_id])], sent)[0]
+    assert claim.verified

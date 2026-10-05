@@ -72,6 +72,15 @@ def test_expand_context_long_text_sends_the_piece_but_long_table_stays_whole():
     assert [i["text"] for i in out] == ["the matched piece", long]
 
 
+def test_expand_context_puts_the_header_with_trial_name_on_top_of_the_section():
+    header = "Title: Tirzepatide Once Weekly | Trial: SURMOUNT-1 (NCT04184622) | Section: Results"
+    hits = [hit("c1", f"{header}\n\npiece 1", "whole Results section"),
+            hit("c2", f"{header}\n\npiece 2", "whole Results section")]
+    out = expand_context(hits)
+    assert [i["text"] for i in out] == [f"{header}\n\nwhole Results section"]
+    assert out[0]["chunk_ids"] == ["c1", "c2"]
+
+
 def test_expand_context_skips_what_does_not_fit_the_budget():
     big, small = "word " * 50, "short table"
     budget = count_tokens(big) + count_tokens(small)
