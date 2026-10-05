@@ -97,7 +97,7 @@ class HybridPostgresRetriever(BaseRetriever):
         return [Document(page_content=r.pop("content"), metadata=r) for r in interleave(ranked_lists, self.limit)]
 
 
-def _sources(docs: list[Document]) -> list[Source]:
+def to_sources(docs: list[Document]) -> list[Source]:
     ids = list({d.metadata["doc_id"] for d in docs})
     with pool().connection() as conn:
         rows = conn.execute("select doc_id, source, title, url, published_date, license from documents "
@@ -125,5 +125,5 @@ def search(query: str, mode: SearchMode = "hybrid", strategy: Strategy = "sectio
     docs = rerank_docs(docs, query, k) if rerank else docs[:k]
     return [SearchHit(source=s, dense_rank=d.metadata["dense_rank"], keyword_rank=d.metadata["keyword_rank"],
                       rrf_score=d.metadata["rrf_score"], rerank_score=d.metadata.get("rerank_score"))
-            for s, d in zip(_sources(docs), docs)]
+            for s, d in zip(to_sources(docs), docs)]
 
