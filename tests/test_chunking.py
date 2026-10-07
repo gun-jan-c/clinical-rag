@@ -114,7 +114,9 @@ def test_paper_chunks_name_their_trial_in_the_header():
         "Title: Drug X trial | Trial: SURMOUNT-1 (NCT04184622), NCT00000001 | Section: Results\n\n")
     assert strategies.section_chunks(_doc())[0]["content"].startswith("Title: Drug X trial | Section: Results\n\n")
     registry = _doc(source="clinicaltrials.gov", metadata={**_doc()["metadata"], "nct_ids": ["NCT04184622"]})
-    assert strategies.trial_label(registry, acronyms) is None
+    assert strategies.trial_label(registry, acronyms) == "SURMOUNT-1 (NCT04184622)"  # fix D: its own acronym
+    no_acronym = _doc(source="clinicaltrials.gov", metadata={**_doc()["metadata"], "nct_ids": ["NCT00000001"]})
+    assert strategies.trial_label(no_acronym, acronyms) is None  # no acronym -> no label (NCT already in content)
 
 
 def test_europe_pmc_trial_label_ignores_trials_only_cited_in_the_body():

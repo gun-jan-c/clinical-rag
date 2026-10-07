@@ -123,12 +123,16 @@ def split_section(text: str) -> list[str]:
 
 def trial_label(doc: dict, acronyms: dict[str, str | None]) -> str | None:
     """'SURMOUNT-1 (NCT04184622)' for each registered trial a paper reports. A paper's Results part often never
-    names its trial (only the Conclusions do), so the label goes in every chunk header. None for registry entries.
+    names its trial (only the Conclusions do), so the label goes in every chunk header.
+
+    A registry entry gets its own acronym when it has one (fix D), so acronym + attribute questions ("STEP 1 BMI")
+    find the record itself, not only the papers about it. Entries without an acronym get no label: their NCT id is
+    already in `content` (migration 004), so a bare "NCT… (NCT…)" would only add noise.
 
     Europe PMC `nct_ids` come from the full text, which also cites other trials (561 IDs vs 238 in title +
     abstract), so for those papers only the title, abstract and trial-registration sections count."""
     if doc["source"] == "clinicaltrials.gov":
-        return None
+        return ", ".join(f"{acronyms[i]} ({i})" for i in doc["metadata"].get("nct_ids", []) if acronyms.get(i)) or None
     ids = doc["metadata"].get("nct_ids", [])
     if doc["source"] == "europepmc":
         own = " ".join([doc["title"], *(t for n, t in doc["sections"].items() if OWN_TRIAL_SECTION_RE.search(n))])
