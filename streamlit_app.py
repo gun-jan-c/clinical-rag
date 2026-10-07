@@ -43,6 +43,9 @@ def home() -> None:
         st.markdown(f"**{answer.question}**")
         if not answer.claims and answer.not_found:
             st.info("The sources don't answer this question.", icon=":material/search_off:")
+        elif answer.claims and answer.not_found:
+            st.warning("I can't fully answer this question from the sources. Here is what I did find.",
+                       icon=":material/info:")
         components.claims(answer.claims, answer.sources, key="answer")
         components.not_found(answer.not_found)
         components.usage_footer(answer.usage)
