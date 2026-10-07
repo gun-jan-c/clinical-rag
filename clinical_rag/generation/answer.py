@@ -1,6 +1,6 @@
 """Single-question RAG (ProjectSpec.md section 3, steps 2-7). services/api.ask() adds the daily cap and audit.
 
-hybrid retrieval (top 20, only the drugs the question names, if any) -> rerank (top 8) -> context expansion (6,000-token budget) -> the generation model
+hybrid retrieval (top 50, only the drugs the question names, if any) -> rerank (top 8) -> context expansion (6,000-token budget) -> the generation model
 writes claims with citations (structured output, one retry) -> every claim is verified. Step times are logged.
 """
 
@@ -22,6 +22,8 @@ from clinical_rag.schemas import Answer, Claim, Source, Usage
 log = logging.getLogger(__name__)
 
 TOP_K = 8
+RERANK_CANDIDATES = 50  # pool the reranker sees; wider than the Search Lab's 20 so a low-similarity original
+# (e.g. the SURMOUNT-1 paper, hybrid rank ~31) is included for rerank to lift (decision log, fix C)
 MAX_OUTPUT_TOKENS = 4_000  # includes the model's reasoning tokens
 
 
@@ -76,7 +78,7 @@ def answer_question(question: str) -> Answer:
         now = time.perf_counter()
         times[step], last = round((now - last) * 1000), now
 
-    docs = HybridPostgresRetriever(filter_named_drugs=True).invoke(question)
+    docs = HybridPostgresRetriever(filter_named_drugs=True, limit=RERANK_CANDIDATES).invoke(question)
     lap("retrieve")
     docs = rerank(docs, question, TOP_K)
     lap("rerank")

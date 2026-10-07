@@ -83,8 +83,8 @@ class HybridPostgresRetriever(BaseRetriever):
             vector = np.zeros(EMBEDDING_DIMENSIONS, dtype=np.float32)
         else:
             vector = np.array(_embedder(self.embedding_model).embed_query(query), dtype=np.float32)
-        # Hybrid asks for the fused top N; the single modes ask for everything so their own top N is complete.
-        match_count = CANDIDATES if self.mode == "hybrid" else 2 * CANDIDATE_POOL
+        # Hybrid asks for the fused top N (N = limit); the single modes ask for everything so their own top N is complete.
+        match_count = self.limit if self.mode == "hybrid" else 2 * CANDIDATE_POOL
         with pool().connection() as conn:
             aliases = drug_aliases(conn)
             keyword_text = expand(query, aliases)
@@ -95,7 +95,7 @@ class HybridPostgresRetriever(BaseRetriever):
                 cur = conn.execute(
                     "select * from hybrid_search(%s, %s, %s, %s, %s, %s, %s)",
                     (keyword_text, vector, self.embedding_model, self.strategy, Jsonb(where), match_count,
-                     CANDIDATE_POOL))
+                     max(CANDIDATE_POOL, self.limit)))  # each list must be at least as deep as the fused count asked for
                 cols = [c.name for c in cur.description]
                 ranked_lists.append(rank_rows([dict(zip(cols, r)) for r in cur.fetchall()], self.mode))
         return [Document(page_content=r.pop("content"), metadata=r) for r in interleave(ranked_lists, self.limit)]
