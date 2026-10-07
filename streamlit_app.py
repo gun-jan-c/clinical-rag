@@ -61,6 +61,7 @@ else:
                           st.Page("pages/1_Generate.py", title="Generate", icon=":material/edit_note:"),
                           st.Page("pages/2_Review.py", title="Review", icon=":material/fact_check:"),
                           st.Page("pages/3_Search_Lab.py", title="Search Lab", icon=":material/manage_search:"),
-                          st.Page("pages/4_Pipeline.py", title="Pipeline", icon=":material/bar_chart:")])
+                          st.Page("pages/4_Pipeline.py", title="Pipeline", icon=":material/bar_chart:"),
+                          st.Page("pages/5_Evaluation.py", title="Evaluation", icon=":material/science:")])
     page.run()
     sidebar()  # after the page, so the usage meter includes what the page just did

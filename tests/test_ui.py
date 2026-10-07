@@ -216,6 +216,15 @@ def test_pipeline_filters_by_phase(app):
     assert len(table) == len(mock.TRIALS) // 2 and set(table["Phase"]) == {"Phase 3"}
 
 
+def test_evaluation_lists_runs_with_recall(app):
+    log_in(app)
+    app.switch_page("pages/5_Evaluation.py").run()
+    assert not app.exception
+    table = app.dataframe[0].value
+    assert len(table) == len(mock.list_eval_runs())
+    assert "recall@10" in table.columns
+
+
 def test_review_notes_trials_counted_under_two_drugs(app, no_briefs, monkeypatch):
     both = mock.TRIALS[0].model_copy(update={"nct_id": "NCT99999999", "drug": "semaglutide, tirzepatide"})
     section = mock._section
